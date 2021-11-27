@@ -1,35 +1,60 @@
 const express           = require('express');
-const session           = require('express-session')
+const flash             = require('express-flash');
+const session           = require('express-session');
 const expressLayouts    = require('express-ejs-layouts');
 const localStratergy    = require('passport-local');
 const passport          = require('passport');
 const bcrypt            = require('bcrypt');
 const mongoose          = require('mongoose');
 
-// Moongose connection.
+/*
+ * Connecting to mongoose database.
+ */
 mongoose.connect('mongodb://127.0.0.1:27017/appdb');
 
-// Mongoose User.
+
+/*
+ * Declaring and defining the User table created in /models/user.
+ */
 const User = require('./models/user');
 
-// Express app.
+
+/*
+ * Creating the app from express().
+ */
 const app = express();
 
-// Middleware.
+
+/*
+ * Middlewares.
+ */
 app.use(expressLayouts);
 app.use(express.urlencoded( {extended : true} ));
-
-// Express session.
+app.use(express.json());
+app.use(flash());
 app.use(session({
-    secret : 'secret',
+    secret : 'SuperSecretKey',
     resave : false,
     saveUninitialized : true
 }))
 
-// Passport.js
+
+/*
+ * Preparing our passport.js.
+ */
 app.use(passport.initialize());
 app.use(passport.session());
 
+
+/*
+ * Setting up the viewport.
+ */
+app.set('view engine', 'ejs');
+
+
+/*
+ * Passport.JS
+ */
 passport.serializeUser((user, done) => {
     done(null, user.id);
 });
@@ -40,95 +65,172 @@ passport.deserializeUser((id, done) => {
     });
 });
 
-passport.use(new localStratergy( (username, password, done) => {
-    User.findOne({ username : username }, (err, user) => {
-        if (err) return done(err);
-        if (!user) return done(null, false, { message : 'Incorrect username.'});
 
-        bcrypt.compare(password, user.password, (err, res) => {
+/*
+ * The Passport.JS Authentication.
+ */
+passport.use(new localStratergy({
+        passReqToCallback: true
+    },
+    (req, username, password, done) => {
+        User.findOne({ username : username }, (err, user) => {
             if (err) return done(err);
-            if (res === false) return done(null, false, { message : 'Incorrect password.'});
+            if (!user) return done(null, false, req.flash('error', 'Incorrect Username or Password.'));
 
-            return done(null, user);
+            bcrypt.compare(password, user.password, (err, res) => {
+                if (err) return done(err);
+                if (res === false) return done(null, false, req.flash('error', 'Incorrect Username or Password.'));
+
+                return done(null, user);
+            });
         });
-    });
 }));
 
-// Setting the view-port.
-app.set('view engine', 'ejs');
 
-// Login page.
+/*
+ * GET Request for our Login Page.
+ */
 app.get('/login', isLoggedOut, (req, res) => {
-    res.render('login');
-})
+    const error= req.flash('error');
 
-app.post('/login', passport.authenticate('local', {
-    successRedirect : '/',
-    failureRedirect : '/login'
-}));
-
-// Index page.
-app.get('/', isLoggedIn, (req, res) => {
-    res.render('index', { user : req.user.username });
-})
-
-// Register page.
-app.get('/register', isLoggedOut, (req, res) => {
-    res.render('register');
+    res.render('login', { title : 'Login', error});
 });
 
+
+/*
+ * POST Request for our Login Page.
+ */
+app.post('/login', (req, res) => {
+    passport.authenticate('local', {
+        successRedirect : '/',
+        failureRedirect : '/login',
+        failureFlash : true
+    })(req, res);
+});
+
+
+/*
+ * GET Request for our Dashboard Page.
+ */
+app.get('/', isLoggedIn, (req, res) => {
+    res.render('index', { user : req.user.username, title : 'Dashboard' });
+})
+
+
+/* 
+ * GET Request for our Registration Page.
+ */
+app.get('/register', isLoggedOut, (req, res) => {
+    const username_length_error = req.flash('username_length_error');
+    const password_length_error = req.flash('password_length_error');
+    const exist_error = req.flash('exist_error');
+    const username_invalid = req.flash('username_invalid')
+
+    res.render('register', { title : 'Register', username_length_error, password_length_error, exist_error, username_invalid });
+});
+
+
+/*
+ * POST Request for our Login Page.
+ */
 app.post('/register', async(req, res) => {
-    if (req.body.username.length <= 3 || req.body.password.length <= 3)
+    // If USERNAME includes -*"_' then an error is displayed.
+    if (req.body.username.includes('-') || req.body.username.includes('*') || req.body.username.includes('"') || req.body.username.includes('\'') || req.body.username.includes('_') )
     {
-        res.send('Username and Password needs to be atleast 4 words.');
+        req.flash('username_invalid', 'Username cannot have -*"_\'');
     }
-    else 
+
+
+    // If USERNAME length is less than 6 than an error is displayed.
+    if (req.body.username.length <= 5)
     {
+        req.flash('username_length_error', 'Username needs to be atleast 6 words!');
+    }
+
+
+    // If PASSWORD length is less than 6 than an error is displayed.
+    if (req.body.password.length <= 5)
+    {
+        req.flash('password_length_error', 'Password needs to be atleast 6 words!');
+    }
+
+
+    // If USERNAME and PASSWORD is fine then the following statement is executed.
+    if (req.body.username.length > 5 && req.body.password.length > 5 )
+    {
+        // Checking if the username is taken.
         var exist = await User.exists({username : req.body.username});
 
+        // If the username is taken than an error is displayed.
         if (exist == true) {
-            res.send('User already exist!');
+            req.flash('exist_error', 'The user already exist!');
         }
+        // Else we are creating the user.
         else 
         {
+            // Generating the bcrypt salt.
             bcrypt.genSalt(12, async(err, salt) => {
                 if (err) throw err;
-    
+
+                // Hashing the PASSWORD the user entered.
                 bcrypt.hash(req.body.password, salt, async(err, hash) => {
                     if (err) throw err;
-    
+
+                    // Declaring the NewUser variable which holds the username and hashed password. 
                     const NewUser = await new User({
                         username : req.body.username,
                         password : hash
                     });
-    
+
+                    // Adding the user to the database table.
                     await NewUser.save();
-    
-                    res.redirect('/login');
                 });
             });
+
+            // Redirecting the user after the creation was successfull.
+            res.redirect('/');
         }
     }
+
+    // Redirecting to Register Page.
+    res.redirect('/register');
+
 });
 
-// Logout.
+
+/*
+ * GET Request for our Logout Page.
+ */
 app.get('/logout', (req, res) => {
+    /*
+     * The following code signs us out of the dashboard.
+     */
     req.logOut();
     res.redirect('/login');
 });
 
-// Starting the connection on port 3000.
+
+/*
+ * Creating our connection on port 3000.
+ */
 app.listen(3000, () => {
+    // Prints the message if everything ran successfully.
     console.log('Listening on port 3000.');
 });
 
-// IsLoggedIn.
+
+/*
+ * isLoggedIn returns the user to the dashboard if the user tries to enter pages such as login and register.
+ */
 function isLoggedIn(req, res, next) {
     if (req.isAuthenticated()) return next();
     res.redirect('/login');
 }
 
-// IsLoggedOut.
+
+/*
+ * isLoggedOut returns the user to login.
+ */
 function isLoggedOut(req, res, next)
 {
     if (!req.isAuthenticated()) return next();

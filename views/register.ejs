@@ -1,8 +1,27 @@
 <h1 class="text-center">REGISTER</h1><br>
+
+<% if(username_length_error.length > 0) { %>
+    <div class="alert alert-warning" role="alert">
+        <%= username_length_error %>
+    </div>
+<% } %> 
+
+<% if(password_length_error.length > 0) { %>
+    <div class="alert alert-warning" role="alert">
+        <%= password_length_error %>
+    </div>
+<% } %>
+
+<% if(username_invalid.length > 0) { %>
+    <div class="alert alert-warning" role="alert">
+        <%= username_invalid %>
+    </div>
+<% } %>
+
 <form action="/register" method="post">
     <label>Username: </label><br>
-    <input class="w-100 form-control" type="text" name="username">
+    <input class="form-control" type="text" name="username">
     <label>Password: </label><br>
-    <input class="w-100 form-control" type="text" name="password"><br>
+    <input class="form-control" type="text" name="password"><br>
     <input class="btn btn-primary w-100" type="submit" name="sumbit">
 </form>
