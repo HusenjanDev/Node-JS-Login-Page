@@ -184,11 +184,11 @@ app.post('/register', async(req, res) => {
 
                     // Adding the user to the database table.
                     await NewUser.save();
+
+                    // Redirecting the user after the creation was successfull.
+                    res.redirect('/login');
                 });
             });
-
-            // Redirecting the user after the creation was successfull.
-            res.redirect('/');
         }
     }
 
