@@ -59,6 +59,7 @@ passport.serializeUser((user, done) => {
     done(null, user.id);
 });
 
+
 passport.deserializeUser((id, done) => {
     User.findById(id, (err, user) => {
         done(err, user);
@@ -73,10 +74,17 @@ passport.use(new localStratergy({
         passReqToCallback: true
     },
     (req, username, password, done) => {
+        // Searching for the user.
         User.findOne({ username : username }, (err, user) => {
+            /*
+             * If errors occurs these statements are executed.
+             */
             if (err) return done(err);
             if (!user) return done(null, false, req.flash('error', 'Incorrect Username or Password.'));
 
+            /*
+             * Authenticating the user.
+             */
             bcrypt.compare(password, user.password, (err, res) => {
                 if (err) return done(err);
                 if (res === false) return done(null, false, req.flash('error', 'Incorrect Username or Password.'));
@@ -121,11 +129,15 @@ app.get('/', isLoggedIn, (req, res) => {
  * GET Request for our Registration Page.
  */
 app.get('/register', isLoggedOut, (req, res) => {
+    /*
+     * Getting flash error messages.
+     */
     const username_length_error = req.flash('username_length_error');
     const password_length_error = req.flash('password_length_error');
-    const exist_error = req.flash('exist_error');
-    const username_invalid = req.flash('username_invalid')
+    const exist_error           = req.flash('exist_error');
+    const username_invalid      = req.flash('username_invalid');
 
+    // Rendering the Registration Page.
     res.render('register', { title : 'Register', username_length_error, password_length_error, exist_error, username_invalid });
 });
 
