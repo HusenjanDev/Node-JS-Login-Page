@@ -108,13 +108,10 @@ app.get('/login', isLoggedOut, (req, res) => {
 /*
  * POST Request for our Login Page.
  */
-app.post('/login', (req, res) => {
-    passport.authenticate('local', {
-        successRedirect : '/',
-        failureRedirect : '/login',
-        failureFlash : true
-    })(req, res);
-});
+app.post('/login', passport.authenticate('local', {
+    successRedirect : '/',
+    failureRedirect : '/login'
+}));
 
 
 /*
